@@ -100,13 +100,18 @@ module ActionDispatch
 
       # Builds a hash containing the flashes to keep for the next request.
       # If there are none to keep, returns nil.
-      def to_session_value #:nodoc:
-        flashes_to_keep = @flashes.except(*@discard)
+      def to_session_value(keep_by_default) #:nodoc:
+        if keep_by_default
+          flashes_to_keep = @flashes.except(*@discard)
+        else
+          flashes_to_keep = @flashes.slice(*@keep)
+        end
         return nil if flashes_to_keep.empty?
         {'flashes' => flashes_to_keep}
       end
 
       def initialize(flashes = {}, discard = []) #:nodoc:
+        @keep = Set.new
         @discard = Set.new(stringify_array(discard))
         @flashes = flashes.stringify_keys
         @now     = nil
@@ -131,6 +136,7 @@ module ActionDispatch
       end
 
       def update(h) #:nodoc:
+        @keep.subtract stringify_array(h.keys)
         @discard.subtract stringify_array(h.keys)
         @flashes.update h.stringify_keys
         self
@@ -146,6 +152,7 @@ module ActionDispatch
 
       def delete(key)
         key = key.to_s
+        @keep.delete key
         @discard.delete key
         @flashes.delete key
         self
@@ -160,6 +167,7 @@ module ActionDispatch
       end
 
       def clear
+        @keep.clear
         @discard.clear
         @flashes.clear
       end
@@ -171,6 +179,7 @@ module ActionDispatch
       alias :merge! :update
 
       def replace(h) #:nodoc:
+        @keep.clear
         @discard.clear
         @flashes.replace h.stringify_keys
         self
@@ -204,7 +213,7 @@ module ActionDispatch
       #    flash.keep(:notice)   # keeps only the "notice" entry, the rest of the flash is discarded
       def keep(k = nil)
         k = k.to_s if k
-        @discard.subtract Array(k || keys)
+        @keep.merge Array(k || keys)
         k ? self[k] : self
       end
 
@@ -222,8 +231,9 @@ module ActionDispatch
       #
       # This method is called automatically by filters, so you generally don't need to care about it.
       def sweep #:nodoc:
-        @discard.each { |k| @flashes.delete k }
+        (@discard - @keep).each { |k| @flashes.delete k }
         @discard.replace @flashes.keys
+        @keep.clear
       end
 
       # Convenience accessor for <tt>flash[:alert]</tt>.
@@ -263,13 +273,14 @@ module ActionDispatch
     end
 
     def call(env)
-      @app.call(env)
+      response = @app.call(env)
     ensure
       session    = Request::Session.find(env) || {}
       flash_hash = env[KEY]
 
       if flash_hash && (flash_hash.present? || session.key?('flash'))
-        session["flash"] = flash_hash.to_session_value
+        keep_by_default = (300..399).include?(response[0])
+        session["flash"] = flash_hash.to_session_value(keep_by_default)
         env[KEY] = flash_hash.dup
       end
 

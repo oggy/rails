@@ -5,7 +5,7 @@ class FlashTest < ActionController::TestCase
   class TestController < ActionController::Base
     def set_flash
       flash["that"] = "hello"
-      render :inline => "hello"
+      redirect_to '/somewhere'
     end
 
     def set_flash_now
@@ -26,7 +26,7 @@ class FlashTest < ActionController::TestCase
     def use_flash
       @flash_copy = {}.update flash
       @flashy = flash["that"]
-      render :inline => "hello"
+      redirect_to '/somewhere'
     end
 
     def use_flash_and_keep_it
@@ -39,7 +39,7 @@ class FlashTest < ActionController::TestCase
     def use_flash_and_update_it
       flash.update("this" => "hello again")
       @flash_copy = {}.update flash
-      render :inline => "hello"
+      redirect_to '/somewhere'
     end
 
     def use_flash_after_reset_session
@@ -49,7 +49,7 @@ class FlashTest < ActionController::TestCase
       @flashy_that_reset = flash["that"]
       flash["this"] = "good-bye"
       @flashy_this = flash["this"]
-      render :inline => "hello"
+      redirect_to '/somewhere'
     end
 
     # methods for test_sweep_after_halted_action_chain
@@ -246,7 +246,7 @@ class FlashIntegrationTest < ActionDispatch::IntegrationTest
 
     def set_flash
       flash["that"] = "hello"
-      head :ok
+      redirect_to '/somewhere'
     end
 
     def set_flash_now
@@ -267,7 +267,7 @@ class FlashIntegrationTest < ActionDispatch::IntegrationTest
   def test_flash
     with_test_route_set do
       get '/set_flash'
-      assert_response :success
+      assert_response :redirect
       assert_equal "hello", @request.flash["that"]
 
       get '/use_flash'

@@ -685,7 +685,7 @@ module ActionController
 
         @assigns = @controller.respond_to?(:view_assigns) ? @controller.view_assigns : {}
 
-        if flash_value = @request.flash.to_session_value
+        if flash_value = @request.flash.to_session_value(@response.redirect?)
           @request.session['flash'] = flash_value
         else
           @request.session.delete('flash')
