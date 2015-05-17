@@ -3,6 +3,38 @@ require 'active_support/key_generator'
 
 class FlashTest < ActionController::TestCase
   class TestController < ActionController::Base
+    def run
+      params[:steps].each { |method| send(method) }
+    end
+
+    def set
+      flash[:key] = 'value'
+    end
+
+    def get
+      @key = flash[:key]
+    end
+
+    def keep
+      flash.keep
+    end
+
+    def discard
+      flash.discard
+    end
+
+    def set_now
+      flash.now[:key] = 'value'
+    end
+
+    def do_render
+      render inline: '<%= flash[:key] %>'
+    end
+
+    def do_redirect
+      redirect_to '/target'
+    end
+
     def set_flash
       flash["that"] = "hello"
       redirect_to '/somewhere'
@@ -99,53 +131,102 @@ class FlashTest < ActionController::TestCase
 
   tests TestController
 
-  def test_flash
-    get :set_flash
+  def test_flash_now_with_render
+    get :run, params: {steps: [:set_now, :get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
 
-    get :use_flash
-    assert_equal "hello", assigns["flash_copy"]["that"]
-    assert_equal "hello", assigns["flashy"]
-
-    get :use_flash
-    assert_nil assigns["flash_copy"]["that"], "On second flash"
+    get :run, params: {steps: [:get, :do_render]}
+    assert_nil assigns['key']
+    assert_equal '', @response.body
   end
 
-  def test_keep_flash
-    get :set_flash
+  def test_flash_with_redirect
+    get :run, params: {steps: [:set, :get, :do_redirect]}
+    assert_equal 'value', assigns['key']
 
-    get :use_flash_and_keep_it
-    assert_equal "hello", assigns["flash_copy"]["that"]
-    assert_equal "hello", assigns["flashy"]
-
-    get :use_flash
-    assert_equal "hello", assigns["flash_copy"]["that"], "On second flash"
-
-    get :use_flash
-    assert_nil assigns["flash_copy"]["that"], "On third flash"
+    get :run, params: {steps: [:get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
   end
 
-  def test_flash_now
-    get :set_flash_now
-    assert_equal "hello", assigns["flash_copy"]["that"]
-    assert_equal "bar"  , assigns["flash_copy"]["foo"]
-    assert_equal "hello", assigns["flashy"]
+  def test_flash_with_render
+    get :run, params: {steps: [:set, :get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
 
-    get :attempt_to_use_flash_now
-    assert_nil assigns["flash_copy"]["that"]
-    assert_nil assigns["flash_copy"]["foo"]
-    assert_nil assigns["flashy"]
+    get :run, params: {steps: [:get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
   end
 
-  def test_update_flash
-    get :set_flash
-    get :use_flash_and_update_it
-    assert_equal "hello",       assigns["flash_copy"]["that"]
-    assert_equal "hello again", assigns["flash_copy"]["this"]
-    get :use_flash
-    assert_nil                  assigns["flash_copy"]["that"], "On second flash"
-    assert_equal "hello again", assigns["flash_copy"]["this"], "On second flash"
+  def test_flash_now_with_redirect
+    get :run, params: {steps: [:set_now, :get, :do_redirect]}
+    assert_equal 'value', assigns['key']
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_nil assigns['key']
+    assert_equal '', @response.body
   end
 
+  def test_flash_with_double_redirect
+    get :run, params: {steps: [:set, :get, :do_redirect]}
+    assert_equal 'value', assigns['key']
+
+    get :run, params: {steps: [:get, :keep, :do_redirect]}
+    assert_equal 'value', assigns['key']
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_nil assigns['key']
+    assert_equal '', @response.body
+  end
+
+  def test_render_with_explicit_keep
+    get :run, params: {steps: [:set_now, :keep, :get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
+  end
+
+  def test_render_with_explicit_discard
+    get :run, params: {steps: [:set_now, :discard, :get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_nil assigns['key']
+    assert_equal '', @response.body
+  end
+
+  def test_redirect_with_explicit_keep
+    get :run, params: {steps: [:set, :keep, :get, :do_redirect]}
+    assert_equal 'value', assigns['key']
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_equal 'value', assigns['key']
+    assert_equal 'value', @response.body
+  end
+
+  def test_redirect_with_explicit_discard
+    get :run, params: {steps: [:set, :discard, :get, :do_redirect]}
+    assert_equal 'value', assigns['key']
+
+    get :run, params: {steps: [:get, :do_render]}
+    assert_nil assigns['key']
+    assert_equal '', @response.body
+  end
+
+  ## original tests
+
+if false
+  # keep
   def test_flash_after_reset_session
     get :use_flash_after_reset_session
     assert_equal "hello",    assigns["flashy_that"]
@@ -153,6 +234,7 @@ class FlashTest < ActionController::TestCase
     assert_nil   assigns["flashy_that_reset"]
   end
 
+  # keep
   def test_does_not_set_the_session_if_the_flash_is_empty
     get :std_action
     assert_nil session["flash"]
@@ -236,7 +318,9 @@ class FlashTest < ActionController::TestCase
     assert_not TestController._flash_types.include?(:bar)
   end
 end
+end
 
+if false
 class FlashIntegrationTest < ActionDispatch::IntegrationTest
   SessionKey = '_myapp_session'
   Generator  = ActiveSupport::LegacyKeyGenerator.new('b3c631c314c0bbca50c1b2843150fe33')
@@ -334,4 +418,5 @@ class FlashIntegrationTest < ActionDispatch::IntegrationTest
         yield
       end
     end
+end
 end
